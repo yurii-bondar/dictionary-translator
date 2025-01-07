@@ -75,7 +75,7 @@ const VEHICLES_VOCABULARY = require('./vocabularies/vehicles');
 // essentially define the index of the language we need
 const TRANSLATOR_ID = TRANSLATOR_IDS[LANG_IDS.UKRAINIAN];
 
-// Using a method to work as if with a translator instance
+// Using a method to work as if with a translator instance (I recommend using this method)
 const translator = dictionary(VEHICLES_VOCABULARY, TRANSLATOR_ID);
 
 console.log(translator('car'));
