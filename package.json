@@ -27,6 +27,7 @@
     "test:coverage": "jest --coverage",
     "pretest:types": "npm run build",
     "test:types": "tsd",
+    "prelint": "npm run build",
     "lint": "npx eslint ./"
   },
   "keywords": [
