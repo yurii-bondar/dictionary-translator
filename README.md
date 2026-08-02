@@ -1,109 +1,122 @@
-# Helper for working with translations using dictionaries
+# dictionary-translator
 
->#### Content
->[About](#about)   
-[Constants](#constants)<br>
-[Vocabulary](#vocabulary)<br>
-> [Using](#using)<br>
+[![CI](https://github.com/yurii-bondar/dictionary-translator/actions/workflows/ci.yml/badge.svg)](https://github.com/yurii-bondar/dictionary-translator/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/dictionary-translator.svg)](https://www.npmjs.com/package/dictionary-translator)
+[![npm downloads](https://img.shields.io/npm/dm/dictionary-translator.svg)](https://www.npmjs.com/package/dictionary-translator)
+[![license](https://img.shields.io/npm/l/dictionary-translator.svg)](./LICENSE)
+
+A tiny, dependency-free i18n helper for translating words/phrases from plain-object
+dictionaries — with **CLDR-correct pluralization** (via `Intl.PluralRules`) and
+`{{param}}` interpolation. Ships with TypeScript types out of the box.
+
+> #### Content
+> [About](#about)<br>
+> [Install](#install)<br>
+> [Vocabulary](#vocabulary)<br>
+> [Usage](#usage)<br>
+> [API](#api)<br>
 
 <a name="about"><h2>About</h2></a>
-- Helps you work with translations using existing word dictionaries
-- Has functionality for working with numerical cases of words
-- Has the ability to modify words from the dictionary
 
-<a name="constants"><h2>Constants</h2></a>
-```js
-// constants/translator.js
+- Translates keys from a plain-object vocabulary you own — no build step, no external service.
+- Picks the correct plural form **per locale** using `Intl.PluralRules` (CLDR rules), so
+  English, Ukrainian, Polish, Czech, Lithuanian, etc. are each pluralized correctly —
+  not with a single hard-coded formula.
+- Supports `{{param}}` interpolation and dot-namespaced keys (`"user.greeting"`).
+- Zero runtime dependencies. Full TypeScript declarations included.
 
-const LANG_IDS = {
-    UKRAINIAN: 1,
-    LITHUANIAN: 2,
-    POLISH: 3,
-    CZECH: 4,
-    ENGLISH: 5
-};
+<a name="install"><h2>Install</h2></a>
 
-module.exports = {
-    LANG_IDS,
-    TRANSLATOR_IDS: {
-        [LANG_IDS.UKRAINIAN]: 0,
-        [LANG_IDS.LITHUANIAN]: 1,
-        [LANG_IDS.POLISH]: 2,
-        [LANG_IDS.CZECH]: 3,
-        [LANG_IDS.ENGLISH]: 4,
-    },
-    TEST_COUNTS: {
-        ONE: 1,
-        THREE: 3,
-        SEVENTEEN: 17,
-        FIFTY_ONE: 51,
-        NINETY_NINE: 99
-    }
-}
+```bash
+npm install dictionary-translator
 ```
 
 <a name="vocabulary"><h2>Vocabulary</h2></a>
+
+A vocabulary entry maps each locale (BCP 47 tag, e.g. `uk`, `en`, `pl`, `cs`, `lt`) to
+either a plain string, or a map of CLDR plural categories (`one`, `few`, `many`, `other`, ...)
+when the value depends on a count.
+
 ```js
 // vocabularies/vehicles.js
 
 module.exports = {
-    // UKRAINIAN, LITHUANIAN, POLISH, CZECH, ENGLISH
-    car: ['автомобіль', 'automobilis', 'samochód', 'auto', 'car'],
-    cars: [
-        // UKRAINIAN
-        ['автомобіль', 'автомобілі', 'автомобілів'],
-        // LITHUANIAN
-        ['automobilis', 'automobiliai', 'automobilių'],
-        // POLISH
-        ['samochód', 'samochody', 'samochodów'],
-        // CZECH
-        ['auto', 'auta', 'aut'],
-        // ENGLISH
-        ['car', 'cars', 'cars'],
-    ],
-}
+  car: {
+    uk: 'автомобіль',
+    en: 'car',
+    pl: 'samochód',
+    cs: 'auto',
+    lt: 'automobilis',
+  },
+  cars: {
+    uk: { one: 'автомобіль', few: 'автомобілі', many: 'автомобілів' },
+    en: { one: 'car', other: 'cars' },
+    pl: { one: 'samochód', few: 'samochody', many: 'samochodów', other: 'samochodów' },
+    cs: { one: 'auto', few: 'auta', many: 'aut', other: 'aut' },
+    lt: { one: 'automobilis', few: 'automobiliai', many: 'automobilių', other: 'automobilių' },
+  },
+  greeting: {
+    uk: 'Привіт, {{name}}!',
+    en: 'Hello, {{name}}!',
+  },
+};
 ```
-<b><i>Pay attention</i></b> to the sequence of translations you set up in your vocabulary
 
-<a name="using"><h2>Using</h2></a>
+<a name="usage"><h2>Usage</h2></a>
+
 ```js
 const { translate, dictionary } = require('dictionary-translator');
-
-const { TRANSLATOR_IDS, LANG_IDS, TEST_COUNTS } = require('./constants/translator');
 const VEHICLES_VOCABULARY = require('./vocabularies/vehicles');
 
-// essentially define the index of the language we need
-const TRANSLATOR_ID = TRANSLATOR_IDS[LANG_IDS.UKRAINIAN];
+// Bound translator (recommended): fix the vocabulary + locale once.
+const t = dictionary(VEHICLES_VOCABULARY, 'uk');
 
-// Using a method to work as if with a translator instance (I recommend using this method)
-const translator = dictionary(VEHICLES_VOCABULARY, TRANSLATOR_ID);
+console.log(t('car'));                                    // автомобіль
+console.log(`1 ${t('cars', { count: 1 })}`);               // 1 автомобіль
+console.log(`3 ${t('cars', { count: 3 })}`);                // 3 автомобілі
+console.log(`17 ${t('cars', { count: 17 })}`);              // 17 автомобілів
+console.log(`51 ${t('cars', { count: 51 })}`);              // 51 автомобіль
+console.log(`99 ${t('cars', { count: 99, modifier: 'capitalize' })}`); // 99 Автомобілів
+console.log(t('greeting', { params: { name: 'Юрій' } }));   // Привіт, Юрій!
 
-console.log(translator('car'));
-console.log(`${TEST_COUNTS.ONE} ${translator('cars', TEST_COUNTS.ONE)}`);
-console.log(`${TEST_COUNTS.FIFTY_ONE} ${translator('cars', TEST_COUNTS.FIFTY_ONE)}`);
-console.log(`${TEST_COUNTS.THREE} ${translator('cars', TEST_COUNTS.THREE)}`);
-console.log(`${TEST_COUNTS.SEVENTEEN} ${translator('cars', TEST_COUNTS.SEVENTEEN)}`);
-// used 'capitalize' modifier
-console.log(`${TEST_COUNTS.NINETY_NINE} ${translator('cars', TEST_COUNTS.NINETY_NINE, 'capitalize')}`);
+// Same, in English — note 51 correctly resolves to "cars", not "car":
+const tEn = dictionary(VEHICLES_VOCABULARY, 'en');
+console.log(`51 ${tEn('cars', { count: 51 })}`); // 51 cars
 
-// Using the direct method for translation (better to use when there are several words in the vocabulary)
-console.log(translate(VEHICLES_VOCABULARY, 'car', TRANSLATOR_ID));
-console.log(`${TEST_COUNTS.ONE} ${translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.ONE)}`);
-console.log(`${TEST_COUNTS.FIFTY_ONE} ${translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.FIFTY_ONE)}`);
-console.log(`${TEST_COUNTS.THREE} ${translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.THREE)}`);
-console.log(`${TEST_COUNTS.SEVENTEEN} ${translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.SEVENTEEN)}`);
-// used 'capitalize' modifier
-console.log(`${TEST_COUNTS.NINETY_NINE} ${translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.NINETY_NINE, 'capitalize')}`);
+// Direct call (handy when translating a handful of one-off keys):
+console.log(translate(VEHICLES_VOCABULARY, 'car', 'uk'));
+console.log(translate(VEHICLES_VOCABULARY, 'cars', 'uk', { count: 3 }));
 ```
 
-What we get in the end (as you can see, the result is the same for both methods <i>translate</i> and <i>dictionary</i>):
-```bash
-[/rest-service]
-> node index.js
-автомобіль
-1 автомобіль
-51 автомобіль
-3 автомобілі
-17 автомобілів
-99 Автомобілів
+TypeScript:
+
+```ts
+import { translate, dictionary, type Vocabulary } from 'dictionary-translator';
+
+const vocabulary: Vocabulary = require('./vocabularies/vehicles');
+const t = dictionary(vocabulary, 'uk');
 ```
+
+<a name="api"><h2>API</h2></a>
+
+### `translate(vocabulary, key, locale, options?)`
+
+| Option           | Type                             | Description                                                     |
+|-------------------|----------------------------------|-------------------------------------------------------------------|
+| `count`           | `number`                        | Selects the plural form via `Intl.PluralRules(locale)`.            |
+| `params`          | `Record<string, string \| number>` | Values substituted into `{{param}}` placeholders.               |
+| `modifier`        | `'capitalize'`                   | Post-processes the resolved string.                                |
+| `fallbackLocale`  | `string`                        | Used if `locale` has no entry for the key.                         |
+| `silent`          | `boolean`                       | Suppresses the `console.warn` on missing keys/locales.              |
+
+Returns the translated `string`, or `undefined` if the key/locale can't be resolved
+(a warning is logged via `console.warn` unless `silent: true`).
+
+Keys may be dot-namespaced, e.g. `translate(vocabulary, 'user.greeting', 'en')`, as
+long as the vocabulary nests them as plain objects (`{ user: { greeting: { en: '...' } } }`).
+
+### `dictionary(vocabulary, locale, defaults?)`
+
+Returns a bound `(key, options?) => string | undefined` function, so you don't have to
+repeat `vocabulary`/`locale` on every call. `defaults` (`fallbackLocale`, `silent`) are
+applied to every call and can still be overridden per-call via `options`.

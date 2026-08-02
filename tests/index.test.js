@@ -2,64 +2,127 @@ const { translate, dictionary } = require('../dist');
 
 describe('dictionary-translator', () => {
   const vocabulary = {
-    car: ['автомобіль', 'automobilis', 'samochód', 'auto', 'car'],
-    cars: [
-      ['автомобіль', 'автомобілі', 'автомобілів'],
-      ['automobilis', 'automobiliai', 'automobilių'],
-      ['samochód', 'samochody', 'samochodów'],
-      ['auto', 'auta', 'aut'],
-      ['car', 'cars', 'cars'],
-    ],
+    car: {
+      uk: 'автомобіль',
+      en: 'car',
+      pl: 'samochód',
+      cs: 'auto',
+      lt: 'automobilis',
+    },
+    cars: {
+      uk: { one: 'автомобіль', few: 'автомобілі', many: 'автомобілів' },
+      en: { one: 'car', other: 'cars' },
+      pl: {
+        one: 'samochód', few: 'samochody', many: 'samochodów', other: 'samochodów',
+      },
+      cs: {
+        one: 'auto', few: 'auta', many: 'aut', other: 'aut',
+      },
+      lt: {
+        one: 'automobilis', few: 'automobiliai', many: 'automobilių', other: 'automobilių',
+      },
+    },
+    greeting: {
+      uk: 'Привіт, {{name}}!',
+      en: 'Hello, {{name}}!',
+    },
+    user: {
+      greeting: {
+        uk: 'Вітаю, {{name}}',
+        en: 'Welcome, {{name}}',
+      },
+    },
   };
 
-  const LANG_IDS = {
-    UKRAINIAN: 1,
-    LITHUANIAN: 2,
-    POLISH: 3,
-    CZECH: 4,
-    ENGLISH: 5,
-  };
-
-  const TRANSLATOR_IDS = {
-    [LANG_IDS.UKRAINIAN]: 0,
-    [LANG_IDS.LITHUANIAN]: 1,
-    [LANG_IDS.POLISH]: 2,
-    [LANG_IDS.CZECH]: 3,
-    [LANG_IDS.ENGLISH]: 4,
-  };
-
-  const TEST_COUNTS = {
-    ONE: 1,
-    THREE: 3,
-    SEVENTEEN: 17,
-    FIFTY_ONE: 51,
-    NINETY_NINE: 99,
-  };
-
-  const TRANSLATOR_ID = TRANSLATOR_IDS[LANG_IDS.UKRAINIAN];
-  const translator = dictionary(vocabulary, TRANSLATOR_ID);
-
-  test('should correctly translate singular "car"', () => {
-    expect(translator('car')).toBe('автомобіль');
+  describe('singular translation', () => {
+    test('translates a plain string per locale', () => {
+      expect(translate(vocabulary, 'car', 'uk')).toBe('автомобіль');
+      expect(translate(vocabulary, 'car', 'en')).toBe('car');
+      expect(translate(vocabulary, 'car', 'pl')).toBe('samochód');
+    });
   });
 
-  test('should correctly translate "cars" with numbers', () => {
-    expect(translator('cars', TEST_COUNTS.ONE)).toBe('автомобіль');
-    expect(translator('cars', TEST_COUNTS.THREE)).toBe('автомобілі');
-    expect(translator('cars', TEST_COUNTS.SEVENTEEN)).toBe('автомобілів');
-    expect(translator('cars', TEST_COUNTS.FIFTY_ONE)).toBe('автомобіль');
-    expect(translator('cars', TEST_COUNTS.NINETY_NINE, 'capitalize')).toBe('Автомобілів');
+  describe('pluralization (Intl.PluralRules-based, correct per language)', () => {
+    test('Ukrainian: 1/3/17/51/99', () => {
+      expect(translate(vocabulary, 'cars', 'uk', { count: 1 })).toBe('автомобіль');
+      expect(translate(vocabulary, 'cars', 'uk', { count: 3 })).toBe('автомобілі');
+      expect(translate(vocabulary, 'cars', 'uk', { count: 17 })).toBe('автомобілів');
+      expect(translate(vocabulary, 'cars', 'uk', { count: 51 })).toBe('автомобіль');
+    });
+
+    test('English: only "one" (1) vs "other" (everything else, including 51)', () => {
+      expect(translate(vocabulary, 'cars', 'en', { count: 1 })).toBe('car');
+      expect(translate(vocabulary, 'cars', 'en', { count: 51 })).toBe('cars');
+      expect(translate(vocabulary, 'cars', 'en', { count: 0 })).toBe('cars');
+    });
+
+    test('capitalize modifier is applied after pluralization', () => {
+      expect(translate(vocabulary, 'cars', 'uk', { count: 99, modifier: 'capitalize' }))
+        .toBe('Автомобілів');
+    });
   });
 
-  test('should correctly translate singular "car" using translate function', () => {
-    expect(translate(vocabulary, 'car', TRANSLATOR_ID)).toBe('автомобіль');
+  describe('{{param}} interpolation', () => {
+    test('substitutes known params and leaves unknown placeholders untouched', () => {
+      expect(translate(vocabulary, 'greeting', 'uk', { params: { name: 'Юрій' } }))
+        .toBe('Привіт, Юрій!');
+      expect(translate(vocabulary, 'greeting', 'en', { params: {} }))
+        .toBe('Hello, {{name}}!');
+    });
   });
 
-  test('should correctly translate "cars" with numbers using translate function', () => {
-    expect(translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.ONE)).toBe('автомобіль');
-    expect(translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.THREE)).toBe('автомобілі');
-    expect(translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.SEVENTEEN)).toBe('автомобілів');
-    expect(translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.FIFTY_ONE)).toBe('автомобіль');
-    expect(translate(vocabulary, 'cars', TRANSLATOR_ID, TEST_COUNTS.NINETY_NINE, 'capitalize')).toBe('Автомобілів');
+  describe('nested (dot-namespaced) keys', () => {
+    test('resolves "user.greeting" via dot notation', () => {
+      expect(translate(vocabulary, 'user.greeting', 'en', { params: { name: 'Yurii' } }))
+        .toBe('Welcome, Yurii');
+    });
+  });
+
+  describe('fallback locale', () => {
+    test('falls back when the requested locale has no entry', () => {
+      const partial = { hello: { en: 'Hello' } };
+      expect(translate(partial, 'hello', 'de', { fallbackLocale: 'en' })).toBe('Hello');
+    });
+  });
+
+  describe('missing keys / locales', () => {
+    let warnSpy;
+
+    beforeEach(() => {
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warnSpy.mockRestore();
+    });
+
+    test('returns undefined and warns for an unknown key', () => {
+      expect(translate(vocabulary, 'unknown', 'uk')).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    test('returns undefined and warns for a locale with no entry and no fallback', () => {
+      expect(translate(vocabulary, 'car', 'de')).toBeUndefined();
+      expect(warnSpy).toHaveBeenCalled();
+    });
+
+    test('silent: true suppresses the warning', () => {
+      expect(translate(vocabulary, 'unknown', 'uk', { silent: true })).toBeUndefined();
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('dictionary() bound translator', () => {
+    test('binds vocabulary/locale/defaults, matching translate()', () => {
+      const t = dictionary(vocabulary, 'uk');
+      expect(t('car')).toBe(translate(vocabulary, 'car', 'uk'));
+      expect(t('cars', { count: 17 })).toBe(translate(vocabulary, 'cars', 'uk', { count: 17 }));
+    });
+
+    test('applies bound default options (e.g. fallbackLocale) to every call', () => {
+      const partial = { hello: { en: 'Hello' } };
+      const t = dictionary(partial, 'de', { fallbackLocale: 'en' });
+      expect(t('hello')).toBe('Hello');
+    });
   });
 });
